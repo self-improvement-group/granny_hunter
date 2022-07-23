@@ -3,7 +3,7 @@ import hashlib
 import configparser
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Union
 from database import Database
 from html_table import html_table
 
@@ -21,9 +21,8 @@ def md5(fname):
     return hash_md5.hexdigest()
 
 
-def for_files_in(path, func: Callable, filter: Callable, *args, **kwargs):
+def for_files_in(path: Union[str, Path], func: Callable[[os.DirEntry], None], filter: Callable[[os.DirEntry], bool], *args, **kwargs):
     """
-    Filter function take DirEntry object, and must return True or False\n
     *args and **kwargs applied to func()
     """
     with os.scandir(path) as it:
@@ -35,16 +34,15 @@ def for_files_in(path, func: Callable, filter: Callable, *args, **kwargs):
                 for_files_in(entry, func, filter, *args, **kwargs)
 
 
-def for_files_bulk(path, func: Callable, filter: Callable, *args, **kwargs):
+def for_files_bulk(path: Union[str, Path], func: Callable[[os.DirEntry], None], filter: Callable[[os.DirEntry], bool], *args, **kwargs):
     """
-    Filter function take DirEntry object, and must return True or False\n
     *args and **kwargs applied to func()
     """
     file_buf = []
     with os.scandir(path) as it:
         for entry in it:
             if entry.is_file() and filter(entry):
-                file_buf.append(get_metadata_os(entry))
+                file_buf.append(entry)
                 progress(entry)
             elif entry.is_dir() and CHECK_SUBFOLDER:
                 for_files_bulk(entry, func, filter, *args, **kwargs)
@@ -86,20 +84,37 @@ def get_metadata_os(file) -> tuple:
     return data
 
 
+def get_metadata_bulk(files) -> list:
+    result = []
+    for file in files:
+        file_path = Path(file)
+        data = (
+            md5(file),
+            str(file_path.resolve()),
+            str(file.name),
+            str(file.stat().st_size),
+            str(datetime.fromtimestamp(os.path.getmtime(file)))
+        )
+        result.append(data)
+    return result
+
+
 def save(file, db: Database):
     global chkd_count
     global chkd_size
     query = 'INSERT INTO files (file_hash, absolute_path, name, size, last_modified) VALUES (?, ?, ?, ?, ?);'
     metadata = get_metadata_os(file)
     db.execute(query, metadata)
-    # progress
-    chkd_count += 1
-    chkd_size += file.stat().st_size
 
 
 def save_bulk(files: list, db: Database):
     query = 'INSERT INTO files (file_hash, absolute_path, name, size, last_modified) VALUES (?, ?, ?, ?, ?);'
     db.executemany(query, files)
+
+
+def proceesd_bulk(files: list, db: Database):
+    metadata = get_metadata_bulk(files)
+    save_bulk(metadata, db)
 
 
 def create_tables():
@@ -156,7 +171,7 @@ if __name__ == '__main__':
     time_start = datetime.now()
     if BULK:
         for path in paths:
-            for_files_bulk(path, save_bulk, filter=lambda x: x.stat().st_size>=LIMIT_SIZE, db=db)
+            for_files_bulk(path, proceesd_bulk, filter=lambda x: x.stat().st_size>=LIMIT_SIZE, db=db)
     else:
         for path in paths:
             for_files_in(path, save, filter=lambda x: x.stat().st_size>=LIMIT_SIZE, db=db)
