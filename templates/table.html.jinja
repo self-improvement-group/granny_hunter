@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Found Files</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto&display=swap');
+        * {
+            font-family: 'Roboto', sans-serif;
+        }
+        .t-header{
+            background-color: rgba(0, 0, 0, 0.3)
+        }
+        .st-table .st-row:nth-child(even){
+            background-color: rgba(0,0,0, .1)
+        }
+        td {
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <table>
+        <thead class="t-header">
+            <tr>
+                <th>Hash</th><th>Absolute path</th><th>Name</th><th>Size</th><th>Last modified</th>
+            </tr>
+        </thead>
+        <tbody class="st-table">
+            {% for row in data %}
+                <tr class="st-row">
+                    {% for item in row %}
+                        {% if item == row[2] %}
+                            <td><a href="{{ row[1] | get_uri }}">{{ item }}</a></td>
+                        {% elif item == row[3] %}
+                            <td>{{ item | filesizeformat }}</td>
+                        {% else %}
+                            <td>{{ item }}</td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

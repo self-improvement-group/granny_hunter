@@ -7,12 +7,9 @@ import argparse
 from html_table import tabulate
 
 
-
 file_count = 0
 files_size = 0
-LIMIT_SIZE = 80000
 BULK_SIZE = 10
-PATH = 'D:\WorkSpace\Projects_edu\Synonymizer'
 
 
 def md5(fname):
@@ -23,13 +20,11 @@ def md5(fname):
     return hash_md5.hexdigest()
 
 
-
 def search_files(path):
     file_buf = []
-    my_filter=lambda x: x.stat().st_size>=LIMIT_SIZE
     with os.scandir(path) as it:
         for entry in it:
-            if entry.is_file() and my_filter(entry):
+            if entry.is_file() and entry.stat().st_size>=LIMIT_SIZE:
                 file_buf.append(entry)
                 progress(entry)
             elif entry.is_dir():
@@ -38,7 +33,6 @@ def search_files(path):
             if len(file_buf) >= BULK_SIZE: 
                 procees_files(file_buf)
                 file_buf = []
-
     if len(file_buf) > 0: procees_files(file_buf)
 
 
@@ -54,9 +48,6 @@ def progress(file):
     print(f'\rFound files:{file_count} Total size:{files_size} bytes', end='')
 
 def progress_end():
-    global file_count
-    global files_size
-
     print(f'\rFound files:{file_count} Total size:{files_size} bytes')
 
 
@@ -79,10 +70,10 @@ def create_tables():
     files_repeated = """SELECT file_hash, absolute_path, name, size, last_modified FROM files WHERE file_hash IN
         (SELECT file_hash FROM files GROUP BY file_hash HAVING COUNT(*) > 1)
         ORDER BY size DESC, last_modified ASC;
-    """
+        """
     
-    tabulate('repeated_files.html', database_fetch(files_repeated))
-    tabulate('finded_files.html', database_fetch(files_all))
+    tabulate(args.report.joinpath('repeated_files.html'), database_fetch(files_repeated))
+    tabulate(args.report.joinpath('finded_files.html'), database_fetch(files_all))
 
 
 def database_fetch(query):
@@ -91,6 +82,25 @@ def database_fetch(query):
 
 
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='Searches for files larger than the specified size')
+    parser.add_argument('path', type=Path)
+    parser.add_argument('size', type=int)
+    parser.add_argument('-unit', choices=['B', 'KB', 'MB', 'GB'], default='B')
+    parser.add_argument('-report', type=Path, default=Path('/report'))
+    args = parser.parse_args()
+
+    PATH = args.path.resolve()
+
+    match args.unit:
+        case 'B':
+            LIMIT_SIZE = args.size
+        case 'KB':
+            LIMIT_SIZE = args.size * 1024
+        case 'MB':
+            LIMIT_SIZE = args.size * 1048576
+        case 'GB':
+            LIMIT_SIZE = args.size * 1073741824
 
     if Path('cached_files.db').exists():
         os.remove('cached_files.db')
@@ -116,7 +126,8 @@ if __name__ == '__main__':
     time_end = datetime.now()
     progress_end()
     print(time_end - time_start)
-    create_tables()
 
+    # create_tables()
+    
     connection.close()
     os.remove('cached_files.db')
