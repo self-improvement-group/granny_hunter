@@ -44,5 +44,13 @@
             {% endfor %}
         </tbody>
     </table>
+    <div>
+        {% if page|int == 1 %}
+            <a href="{{ name }}{{ page|int + 1 }}.html">Next page</a>
+        {% else %}
+            <a href="{{ name }}{{ page|int - 1 }}.html">Previous page</a>
+            <a href="{{ name }}{{ page|int + 1 }}.html">Next page</a>
+        {% endif %}
+    </div>
 </body>
 </html>

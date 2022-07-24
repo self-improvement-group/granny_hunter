@@ -1,3 +1,4 @@
+from operator import concat
 import os
 import hashlib
 from datetime import datetime
@@ -10,6 +11,11 @@ from html_table import tabulate
 file_count = 0
 files_size = 0
 BULK_SIZE = 10
+QUERY_ALL = 'SELECT file_hash, absolute_path, name, size, last_modified FROM files ORDER BY size DESC, last_modified ASC LIMIT 60 OFFSET '
+QUERY_REPEATED = """SELECT file_hash, absolute_path, name, size, last_modified FROM files WHERE file_hash IN
+        (SELECT file_hash FROM files GROUP BY file_hash HAVING COUNT(*) > 1)
+        ORDER BY size DESC, last_modified ASC LIMIT 60 OFFSET 
+        """
 
 
 def md5(fname):
@@ -61,24 +67,23 @@ def procees_files(files: list):
             str(file.stat().st_size),
             str(datetime.fromtimestamp(os.path.getmtime(file))))
         )
-    cursor.executemany('INSERT INTO files (file_hash, absolute_path, name, size, last_modified) VALUES (?, ?, ?, ?, ?);', metadata)
-    connection.commit()
-
-
-def create_tables():
-    files_all = 'SELECT file_hash, absolute_path, name, size, last_modified FROM files ORDER BY size DESC, last_modified ASC;'
-    files_repeated = """SELECT file_hash, absolute_path, name, size, last_modified FROM files WHERE file_hash IN
-        (SELECT file_hash FROM files GROUP BY file_hash HAVING COUNT(*) > 1)
-        ORDER BY size DESC, last_modified ASC;
-        """
-    
-    tabulate(args.report.joinpath('repeated_files.html'), database_fetch(files_repeated))
-    tabulate(args.report.joinpath('finded_files.html'), database_fetch(files_all))
+    connection.executemany('INSERT INTO files (file_hash, absolute_path, name, size, last_modified) VALUES (?, ?, ?, ?, ?);', metadata)
 
 
 def database_fetch(query):
-    cursor.execute(query)
-    return cursor.fetchall()
+    return connection.execute(query).fetchall()
+
+def render_tables(name, query):
+    offset = 0
+    page = 1
+    while True:
+        data = connection.execute(concat(query, str(offset) + ';')).fetchall()
+        if len(data) == 0:
+            break
+        tabulate(ARGS.report.joinpath(name + str(page) + '.html'), name, data, page)
+        page += 1
+        offset += 60
+    
 
 
 if __name__ == '__main__':
@@ -88,26 +93,25 @@ if __name__ == '__main__':
     parser.add_argument('size', type=int)
     parser.add_argument('-unit', choices=['B', 'KB', 'MB', 'GB'], default='B')
     parser.add_argument('-report', type=Path, default=Path('/report'))
-    args = parser.parse_args()
+    ARGS = parser.parse_args()
 
-    PATH = args.path.resolve()
+    PATH = ARGS.path.resolve()
 
-    match args.unit:
+    match ARGS.unit:
         case 'B':
-            LIMIT_SIZE = args.size
+            LIMIT_SIZE = ARGS.size
         case 'KB':
-            LIMIT_SIZE = args.size * 1024
+            LIMIT_SIZE = ARGS.size * 1024
         case 'MB':
-            LIMIT_SIZE = args.size * 1048576
+            LIMIT_SIZE = ARGS.size * 1048576
         case 'GB':
-            LIMIT_SIZE = args.size * 1073741824
+            LIMIT_SIZE = ARGS.size * 1073741824
 
     if Path('cached_files.db').exists():
         os.remove('cached_files.db')
 
     connection = sqlite3.connect('cached_files.db')
-    cursor = connection.cursor()
-    cursor.execute("""CREATE TABLE IF NOT EXISTS files(
+    connection.execute("""CREATE TABLE IF NOT EXISTS files(
         fileid INTEGER PRIMARY KEY AUTOINCREMENT,
         file_hash TEXT NOT NULL,
         absolute_path TEXT NOT NULL,
@@ -115,7 +119,6 @@ if __name__ == '__main__':
         size INTEGER NOT NULL,
         last_modified TEXT);
         """)
-    connection.commit()
 
 
     progress_start()
@@ -127,7 +130,8 @@ if __name__ == '__main__':
     progress_end()
     print(time_end - time_start)
 
-    # create_tables()
+    render_tables('all', QUERY_ALL)
+    render_tables('repeated', QUERY_REPEATED)
     
     connection.close()
     os.remove('cached_files.db')
