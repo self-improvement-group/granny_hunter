@@ -92,15 +92,13 @@ if __name__ == '__main__':
 
     PATH = ARGS.path.resolve()
 
-    match ARGS.unit:
-        case 'B':
-            LIMIT_SIZE = ARGS.size
-        case 'KB':
-            LIMIT_SIZE = ARGS.size * 1024
-        case 'MB':
-            LIMIT_SIZE = ARGS.size * 1048576
-        case 'GB':
-            LIMIT_SIZE = ARGS.size * 1073741824
+    sizing = {
+        'B': ARGS.size,
+        'KB': ARGS.size << 10,
+        'MB': ARGS.size << 20,
+        'GB': ARGS.size << 30
+    }
+    LIMIT_SIZE = sizing[ARGS.unit]
 
     if Path('cached_files.db').exists():
         os.remove('cached_files.db')
