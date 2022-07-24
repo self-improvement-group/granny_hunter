@@ -8,15 +8,6 @@ import argparse
 from html_table import tabulate
 
 
-file_count = 0
-files_size = 0
-BULK_SIZE = 10
-QUERY_ALL = 'SELECT file_hash, absolute_path, name, size, last_modified FROM files ORDER BY size DESC, last_modified ASC LIMIT 60 OFFSET '
-QUERY_REPEATED = """SELECT file_hash, absolute_path, name, size, last_modified FROM files WHERE file_hash IN
-        (SELECT file_hash FROM files GROUP BY file_hash HAVING COUNT(*) > 1)
-        ORDER BY size DESC, last_modified ASC LIMIT 60 OFFSET 
-        """
-
 
 def md5(fname):
     hash_md5 = hashlib.md5()
@@ -70,9 +61,6 @@ def procees_files(files: list):
     connection.executemany('INSERT INTO files (file_hash, absolute_path, name, size, last_modified) VALUES (?, ?, ?, ?, ?);', metadata)
 
 
-def database_fetch(query):
-    return connection.execute(query).fetchall()
-
 def render_tables(name, query):
     offset = 0
     page = 1
@@ -83,16 +71,23 @@ def render_tables(name, query):
         tabulate(ARGS.report.joinpath(name + str(page) + '.html'), name, data, page)
         page += 1
         offset += 60
-    
 
 
 if __name__ == '__main__':
+    BULK_SIZE = 10
+
+    QUERY_ALL = 'SELECT file_hash, absolute_path, name, size, last_modified FROM files ORDER BY size DESC, last_modified ASC LIMIT 60 OFFSET '
+    
+    QUERY_REPEATED = """SELECT file_hash, absolute_path, name, size, last_modified FROM files WHERE file_hash IN
+            (SELECT file_hash FROM files GROUP BY file_hash HAVING COUNT(*) > 1)
+            ORDER BY size DESC, last_modified ASC LIMIT 60 OFFSET 
+            """
 
     parser = argparse.ArgumentParser(description='Searches for files larger than the specified size')
     parser.add_argument('path', type=Path)
     parser.add_argument('size', type=int)
     parser.add_argument('-unit', choices=['B', 'KB', 'MB', 'GB'], default='B')
-    parser.add_argument('-report', type=Path, default=Path('/report'))
+    parser.add_argument('-report', type=Path, default=Path('report'))
     ARGS = parser.parse_args()
 
     PATH = ARGS.path.resolve()
@@ -120,7 +115,8 @@ if __name__ == '__main__':
         last_modified TEXT);
         """)
 
-
+    file_count = 0
+    files_size = 0
     progress_start()
     time_start = datetime.now()
 
@@ -130,6 +126,7 @@ if __name__ == '__main__':
     progress_end()
     print(time_end - time_start)
 
+    Path(ARGS.report).mkdir(exist_ok=True)
     render_tables('all', QUERY_ALL)
     render_tables('repeated', QUERY_REPEATED)
     
