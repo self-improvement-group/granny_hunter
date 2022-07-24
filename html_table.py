@@ -1,5 +1,4 @@
 from pathlib import Path
-# import os
 
 base = """
 <head>
@@ -23,7 +22,8 @@ base = """
 """
 
 
-def html_table(table_name: str, data, headers: list):
+def tabulate(table_name: str, data):
+    headers = ['Hash MD5', 'Absolute path', 'Name', 'Size', 'Last modified']
     with open(table_name, 'w') as page:
         page.write(base)
         page.write('<table>\n<thead class="t-header">\n<tr>')

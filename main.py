@@ -1,16 +1,18 @@
 import os
 import hashlib
-import configparser
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Union
-from database import Database
-from html_table import html_table
+import sqlite3
+import argparse
+from html_table import tabulate
 
 
 
 file_count = 0
 files_size = 0
+LIMIT_SIZE = 80000
+BULK_SIZE = 10
+PATH = 'D:\WorkSpace\Projects_edu\Synonymizer'
 
 
 def md5(fname):
@@ -21,37 +23,23 @@ def md5(fname):
     return hash_md5.hexdigest()
 
 
-def for_files_in(path: Union[str, Path], func: Callable[[os.DirEntry], None], filter: Callable[[os.DirEntry], bool], *args, **kwargs):
-    """
-    *args and **kwargs applied to func()
-    """
-    with os.scandir(path) as it:
-        for entry in it:
-            if entry.is_file() and filter(entry):
-                func(entry, *args, **kwargs)
-                progress(entry)
-            elif entry.is_dir() and CHECK_SUBFOLDER:
-                for_files_in(entry, func, filter, *args, **kwargs)
 
-
-def for_files_bulk(path: Union[str, Path], func: Callable[[os.DirEntry], None], filter: Callable[[os.DirEntry], bool], *args, **kwargs):
-    """
-    *args and **kwargs applied to func()
-    """
+def search_files(path):
     file_buf = []
+    my_filter=lambda x: x.stat().st_size>=LIMIT_SIZE
     with os.scandir(path) as it:
         for entry in it:
-            if entry.is_file() and filter(entry):
+            if entry.is_file() and my_filter(entry):
                 file_buf.append(entry)
                 progress(entry)
-            elif entry.is_dir() and CHECK_SUBFOLDER:
-                for_files_bulk(entry, func, filter, *args, **kwargs)
+            elif entry.is_dir():
+                search_files(entry)
 
             if len(file_buf) >= BULK_SIZE: 
-                func(file_buf, **kwargs)
+                procees_files(file_buf)
                 file_buf = []
 
-    if len(file_buf) > 0: func(file_buf, **kwargs)
+    if len(file_buf) > 0: procees_files(file_buf)
 
 
 def progress_start():
@@ -69,52 +57,21 @@ def progress_end():
     global file_count
     global files_size
 
-    print(f'\rFound files:{file_count} Files size:{files_size} bytes')
+    print(f'\rFound files:{file_count} Total size:{files_size} bytes')
 
 
-def get_metadata_os(file) -> tuple:
-    file_path = Path(file)
-    data = (
-        md5(file),
-        str(file_path.resolve()),
-        str(file.name),
-        str(file.stat().st_size),
-        str(datetime.fromtimestamp(os.path.getmtime(file)))
-    )
-    return data
-
-
-def get_metadata_bulk(files) -> list:
-    result = []
+def procees_files(files: list):
+    metadata = []
     for file in files:
-        file_path = Path(file)
-        data = (
-            md5(file),
-            str(file_path.resolve()),
+        metadata.append(
+            (md5(file),
+            str(Path(file).resolve()),
             str(file.name),
             str(file.stat().st_size),
-            str(datetime.fromtimestamp(os.path.getmtime(file)))
+            str(datetime.fromtimestamp(os.path.getmtime(file))))
         )
-        result.append(data)
-    return result
-
-
-def save(file, db: Database):
-    global chkd_count
-    global chkd_size
-    query = 'INSERT INTO files (file_hash, absolute_path, name, size, last_modified) VALUES (?, ?, ?, ?, ?);'
-    metadata = get_metadata_os(file)
-    db.execute(query, metadata)
-
-
-def save_bulk(files: list, db: Database):
-    query = 'INSERT INTO files (file_hash, absolute_path, name, size, last_modified) VALUES (?, ?, ?, ?, ?);'
-    db.executemany(query, files)
-
-
-def proceesd_bulk(files: list, db: Database):
-    metadata = get_metadata_bulk(files)
-    save_bulk(metadata, db)
+    cursor.executemany('INSERT INTO files (file_hash, absolute_path, name, size, last_modified) VALUES (?, ?, ?, ?, ?);', metadata)
+    connection.commit()
 
 
 def create_tables():
@@ -123,39 +80,24 @@ def create_tables():
         (SELECT file_hash FROM files GROUP BY file_hash HAVING COUNT(*) > 1)
         ORDER BY size DESC, last_modified ASC;
     """
-    headers = ['Hash MD5', 'Absolute path', 'Name', 'Size', 'Last modified']
-    Path("tables").mkdir(parents=True, exist_ok=True)
-    html_table('tables/repeated_files.html', db.fetch(files_repeated), headers)
-    html_table('tables/finded_files.html', db.fetch(files_all), headers)
+    
+    tabulate('repeated_files.html', database_fetch(files_repeated))
+    tabulate('finded_files.html', database_fetch(files_all))
+
+
+def database_fetch(query):
+    cursor.execute(query)
+    return cursor.fetchall()
 
 
 if __name__ == '__main__':
 
-    config = configparser.ConfigParser()
-    try:
-        config.read('config.ini')
+    if Path('cached_files.db').exists():
+        os.remove('cached_files.db')
 
-        CHECK_SUBFOLDER = config.getboolean('DEFAULT','CHECK_SUBFOLDER')
-        LIMIT_SIZE = config.getint('DEFAULT','LIMIT_SIZE')
-        BULK = config.getboolean('DEFAULT','BULK')
-        BULK_SIZE = config.getint('DEFAULT','BULK_SIZE')
-        paths = config.get('DEFAULT', 'PATHS').split(',')
-
-    except Exception as err:
-        print(err)
-
-    db = Database('files.db')
-
-    if Path('files.db').exists():
-        print('Clear database? Y/n')
-        x = input()
-        match x.lower():
-            case 'y': 
-                db.connect()
-                db.clear('files')
-            case 'n': db.connect()
-            case _: exit()
-    else: db.create("""CREATE TABLE IF NOT EXISTS files(
+    connection = sqlite3.connect('cached_files.db')
+    cursor = connection.cursor()
+    cursor.execute("""CREATE TABLE IF NOT EXISTS files(
         fileid INTEGER PRIMARY KEY AUTOINCREMENT,
         file_hash TEXT NOT NULL,
         absolute_path TEXT NOT NULL,
@@ -163,19 +105,18 @@ if __name__ == '__main__':
         size INTEGER NOT NULL,
         last_modified TEXT);
         """)
+    connection.commit()
 
 
-    print('Make sure that you set up paths for searching\nType Enter to continue...')
-    x = input()
     progress_start()
     time_start = datetime.now()
-    if BULK:
-        for path in paths:
-            for_files_bulk(path, proceesd_bulk, filter=lambda x: x.stat().st_size>=LIMIT_SIZE, db=db)
-    else:
-        for path in paths:
-            for_files_in(path, save, filter=lambda x: x.stat().st_size>=LIMIT_SIZE, db=db)
+
+    search_files(PATH)
+
     time_end = datetime.now()
     progress_end()
     print(time_end - time_start)
     create_tables()
+
+    connection.close()
+    os.remove('cached_files.db')
