@@ -1,12 +1,10 @@
-from operator import concat
 import os
 import hashlib
 from datetime import datetime
 from pathlib import Path
-import sqlite3
 import argparse
 from html_table import tabulate
-
+from operator import itemgetter
 
 
 def md5(fname):
@@ -18,19 +16,19 @@ def md5(fname):
 
 
 def search_files(path):
-    file_buf = []
     with os.scandir(path) as it:
         for entry in it:
             if entry.is_file() and entry.stat().st_size>=LIMIT_SIZE:
-                file_buf.append(entry)
+                big_dic.append(
+                    {'hash':md5(entry),
+                    'path':Path(entry).resolve(),
+                    'name':entry.name,
+                    'size':entry.stat().st_size,
+                    'modified':datetime.fromtimestamp(os.path.getmtime(entry))}
+                )
                 progress(entry)
             elif entry.is_dir():
                 search_files(entry)
-
-            if len(file_buf) >= BULK_SIZE: 
-                procees_files(file_buf)
-                file_buf = []
-    if len(file_buf) > 0: procees_files(file_buf)
 
 
 def progress_start():
@@ -49,39 +47,30 @@ def progress_end():
 
 
 def procees_files(files: list):
-    metadata = []
+
     for file in files:
-        metadata.append(
-            (md5(file),
-            str(Path(file).resolve()),
-            str(file.name),
-            str(file.stat().st_size),
-            str(datetime.fromtimestamp(os.path.getmtime(file))))
+        big_dic.append(
+            {'hash':md5(file),
+            'path':Path(file).resolve(),
+            'name':file.name,
+            'size':file.stat().st_size,
+            'modified':datetime.fromtimestamp(os.path.getmtime(file))}
         )
-    connection.executemany('INSERT INTO files (file_hash, absolute_path, name, size, last_modified) VALUES (?, ?, ?, ?, ?);', metadata)
 
 
-def render_tables(name, query):
+def render_tables(name, data):
     offset = 0
     page = 1
     while True:
-        data = connection.execute(concat(query, str(offset) + ';')).fetchall()
-        if len(data) == 0:
+        page_data = data[offset:offset+60:]
+        if len(page_data) == 0:
             break
-        tabulate(ARGS.report.joinpath(name + str(page) + '.html'), name, data, page)
+        tabulate(ARGS.report.joinpath(name + str(page) + '.html'), name, page_data, page)
         page += 1
         offset += 60
 
-
 if __name__ == '__main__':
-    BULK_SIZE = 10
-
-    QUERY_ALL = 'SELECT file_hash, absolute_path, name, size, last_modified FROM files ORDER BY size DESC, last_modified ASC LIMIT 60 OFFSET '
-    
-    QUERY_REPEATED = """SELECT file_hash, absolute_path, name, size, last_modified FROM files WHERE file_hash IN
-            (SELECT file_hash FROM files GROUP BY file_hash HAVING COUNT(*) > 1)
-            ORDER BY size DESC, last_modified ASC LIMIT 60 OFFSET 
-            """
+    BULK_SIZE = 100
 
     parser = argparse.ArgumentParser(description='Searches for files larger than the specified size')
     parser.add_argument('path', type=Path)
@@ -92,41 +81,41 @@ if __name__ == '__main__':
 
     PATH = ARGS.path.resolve()
 
-    sizing = {
+    LIMIT_SIZE = {
         'B': ARGS.size,
         'KB': ARGS.size << 10,
         'MB': ARGS.size << 20,
         'GB': ARGS.size << 30
-    }
-    LIMIT_SIZE = sizing[ARGS.unit]
+    }[ARGS.unit]
 
-    if Path('cached_files.db').exists():
-        os.remove('cached_files.db')
-
-    connection = sqlite3.connect('cached_files.db')
-    connection.execute("""CREATE TABLE IF NOT EXISTS files(
-        fileid INTEGER PRIMARY KEY AUTOINCREMENT,
-        file_hash TEXT NOT NULL,
-        absolute_path TEXT NOT NULL,
-        name TEXT,
-        size INTEGER NOT NULL,
-        last_modified TEXT);
-        """)
-
+    big_dic = []
     file_count = 0
     files_size = 0
     progress_start()
     time_start = datetime.now()
 
     search_files(PATH)
+    big_dic = sorted(big_dic, key=lambda x: (-x['size'], x['modified']))
 
     time_end = datetime.now()
     progress_end()
     print(time_end - time_start)
 
     Path(ARGS.report).mkdir(exist_ok=True)
-    render_tables('all', QUERY_ALL)
-    render_tables('repeated', QUERY_REPEATED)
-    
-    connection.close()
-    os.remove('cached_files.db')
+    render_tables('all', big_dic)
+
+    big_dic = sorted(big_dic, key=itemgetter('hash'))
+
+    dups = []
+    for i in range(1, len(big_dic)-1):
+        previous = big_dic[i-1]['hash']
+        current = big_dic[i]['hash']
+        next_i = big_dic[i+1]['hash']
+        if current == previous and current != next_i:
+            dups.append(big_dic[i])
+            dups.append(big_dic[i-1])
+        elif current == previous and current == next_i:
+                dups.append(big_dic[i])
+
+    render_tables('dups', dups)
+

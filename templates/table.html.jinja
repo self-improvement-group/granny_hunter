@@ -10,37 +10,56 @@
         * {
             font-family: 'Roboto', sans-serif;
         }
-        .t-header{
-            background-color: rgba(0, 0, 0, 0.3)
+        .table {
+            width: 100%;
+            border: none;
+            margin-bottom: 20px;
+            border-spacing: 0px
         }
-        .st-table .st-row:nth-child(even){
-            background-color: rgba(0,0,0, .1)
+        .table thead th {
+            font-weight: bold;
+            text-align: left;
+            border: none;
+            padding: 10px 15px;
+            background: #d8d8d8;
+            font-size: 14px;
+            border-left: 1px solid #ddd;
+            border-right: 1px solid #ddd;
         }
-        td {
-            padding: 5px;
+        .table tbody td {
+            text-align: left;
+            border-left: 1px solid #ddd;
+            border-right: 1px solid #ddd;
+            padding: 10px 15px;
+            font-size: 14px;
+            vertical-align: top;
+        }
+        .table thead tr th:first-child, .table tbody tr td:first-child {
+            border-left: none;
+        }
+        .table thead tr th:last-child, .table tbody tr td:last-child {
+            border-right: none;
+        }
+        .table tbody tr:nth-child(even){
+            background: #f3f3f3;
         }
     </style>
 </head>
 <body>
-    <table>
-        <thead class="t-header">
+    <table class="table">
+        <thead>
             <tr>
                 <th>Hash</th><th>Absolute path</th><th>Name</th><th>Size</th><th>Last modified</th>
             </tr>
         </thead>
-        <tbody class="st-table">
+        <tbody>
             {% for row in data %}
-                <tr class="st-row">
-                    {% for item in row %}
-                        {% if item == row[2] %}
-                            <td><a href="{{ row[1] | get_uri }}">{{ item }}</a></td>
-                        {% elif item == row[3] %}
-                            <td>{{ item | filesizeformat }}</td>
-                        {% else %}
-                            <td>{{ item }}</td>
-                        {% endif %}
-                    {% endfor %}
-                </tr>
+                <tr>
+                    <td>{{ row.hash }}</td>
+                    <td>{{ row.path }}</td>
+                    <td><a href="{{ row.path | get_uri }}">{{ row.name }}</a></td>
+                    <td>{{ row.size }}</td>
+                    <td>{{ row.modified }}</td>
             {% endfor %}
         </tbody>
     </table>

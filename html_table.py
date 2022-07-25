@@ -3,7 +3,8 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 
 
 def get_uri(path):
-    path = Path(path)
+    if path is not Path:
+        path = Path(path)
     return path.as_uri().replace(path.name, '')
 
 def tabulate(filename: str, name: str, data, page_number):
