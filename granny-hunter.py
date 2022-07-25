@@ -1,8 +1,11 @@
 import os
 import hashlib
+import threading
+import queue
 from datetime import datetime
 from pathlib import Path
 import argparse
+from time import sleep
 from html_table import tabulate
 from operator import itemgetter
 
@@ -28,7 +31,7 @@ def search_files(path):
                 )
                 progress(entry)
             elif entry.is_dir():
-                search_files(entry)
+                q.put(threading.Thread(target=search_files, args=(entry,)))
 
 
 def progress_start():
@@ -40,10 +43,10 @@ def progress(file):
 
     file_count += 1
     files_size += file.stat().st_size
-    print(f'\rFound files:{file_count} Total size:{files_size} bytes', end='')
+    # print(f'\rFound files:{file_count} Total size:{files_size} bytes', end='')
 
 def progress_end():
-    print(f'\rFound files:{file_count} Total size:{files_size} bytes')
+    print(f'Found files:{file_count} Total size:{files_size} bytes')
 
 
 def procees_files(files: list):
@@ -57,6 +60,71 @@ def procees_files(files: list):
             'modified':datetime.fromtimestamp(os.path.getmtime(file))}
         )
 
+class NoThreads(Exception): pass
+
+# о_0
+def loop():
+    tl = []
+    while True:
+        if q.empty():
+            break
+        for i in range(q.qsize()):
+            tl.append(q.get())
+        for ti in tl:
+            ti.start()
+        for ti in tl:
+            ti.join()
+        tl = []
+
+def loop_print():
+    global file_count
+    global files_size
+    while True:
+        print(f'\r... Found files:{file_count} Total size:{files_size} bytes', end='')
+        sleep(0.5)
+        print(f'\r|.. Found files:{file_count} Total size:{files_size} bytes', end='')
+        sleep(0.5)
+        print(f'\r.|. Found files:{file_count} Total size:{files_size} bytes', end='')
+        sleep(0.5)
+        print(f'\r..| Found files:{file_count} Total size:{files_size} bytes', end='')
+        sleep(0.5)
+
+# def loop():
+#     global q
+#     global tl
+#     global ta
+#     while True:
+#             try:
+#                 while len(tl) < 4:
+#                     try:
+#                         it = q.get()
+#                         tl.append(it)
+#                     except:
+#                         try:
+#                             if len(tl) == 0:
+#                                 raise NoThreads
+#                             for t in tl:
+#                                 ta.append(t.is_alive())
+#                             if True not in ta:
+#                                 ta = []
+#                                 break
+#                             ta = []
+#                         except:
+#                             break
+#                         pass
+#                 while True:
+#                     for t in tl:
+#                         try:
+#                             t.start()
+#                         except:
+#                             if not t.is_alive():
+#                                 tl.remove(t)
+#                                 break
+#                             pass
+#             except NoThreads:
+#                 break
+#             except:
+#                 break
 
 def render_tables(name, data):
     offset = 0
@@ -69,8 +137,8 @@ def render_tables(name, data):
         page += 1
         offset += 60
 
+
 if __name__ == '__main__':
-    BULK_SIZE = 100
 
     parser = argparse.ArgumentParser(description='Searches for files larger than the specified size')
     parser.add_argument('path', type=Path)
@@ -91,10 +159,21 @@ if __name__ == '__main__':
     big_dic = []
     file_count = 0
     files_size = 0
-    progress_start()
+
+    q = queue.Queue()
+    ql = threading.Thread(target=loop)
+
+    # progress_start()
     time_start = datetime.now()
 
     search_files(PATH)
+    tl = [q.get()]
+    progres = threading.Thread(target=loop_print)
+    ql.start()
+    progres.start()
+    ql.join()
+    progres.stop()
+
     big_dic = sorted(big_dic, key=lambda x: (-x['size'], x['modified']))
 
     time_end = datetime.now()
