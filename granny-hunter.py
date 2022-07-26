@@ -6,8 +6,8 @@ from pathlib import Path
 import argparse
 from time import sleep
 from html_table import tabulate
-from operator import itemgetter
-
+from operator import concat, itemgetter
+from jinja2.filters import do_filesizeformat
 
 def md5(fname):
     hash_md5 = hashlib.md5()
@@ -27,6 +27,7 @@ def search_loop(path):
             dir_list.remove(folder)
 
 def search(path):
+    global scanned_size
     folders = []
     with os.scandir(path) as it:
         for entry in it:
@@ -39,6 +40,8 @@ def search(path):
                     'modified':datetime.fromtimestamp(os.path.getmtime(entry))}
                 )
                 progress(entry)
+            if entry.is_file():
+                scanned_size += entry.stat().st_size
             elif entry.is_dir():
                 folders.append(entry)
     return folders
@@ -75,13 +78,13 @@ def loop_print():
     global files_size
     t = threading.current_thread()
     while getattr(t, "do_run", True):
-        print(f'\r... Found files:{file_count} Total size:{files_size} bytes', end='')
+        print(f'\r... Found files:{file_count} Scanned:{do_filesizeformat(scanned_size).ljust(7)}', end='')
         sleep(0.1)
-        print(f'\r|.. Found files:{file_count} Total size:{files_size} bytes', end='')
+        print(f'\r|.. Found files:{file_count} Scanned:{do_filesizeformat(scanned_size).ljust(7)}', end='')
         sleep(0.1)
-        print(f'\r.|. Found files:{file_count} Total size:{files_size} bytes', end='')
+        print(f'\r.|. Found files:{file_count} Scanned:{do_filesizeformat(scanned_size).ljust(7)}', end='')
         sleep(0.1)
-        print(f'\r..| Found files:{file_count} Total size:{files_size} bytes', end='')
+        print(f'\r..| Found files:{file_count} Scanned:{do_filesizeformat(scanned_size).ljust(7)}', end='')
         sleep(0.1)
 
 
@@ -116,10 +119,13 @@ if __name__ == '__main__':
     }[ARGS.unit]
 
     big_dic = []
+    spaces = u'0x20'
+    scanned_size = 0
     file_count = 0
     files_size = 0
 
     time_start = datetime.now()
+    print('Time start: ',time_start)
 
     progres = threading.Thread(target=loop_print)
     progres.start()
@@ -130,8 +136,7 @@ if __name__ == '__main__':
     big_dic = sorted(big_dic, key=lambda x: (-x['size'], x['modified']))
 
     time_end = datetime.now()
-
-    print(time_end - time_start)
+    
 
     Path(ARGS.report).mkdir(exist_ok=True)
     render_tables('all', big_dic)
@@ -149,5 +154,12 @@ if __name__ == '__main__':
         elif current == previous and current == next_i:
                 dups.append(big_dic[i])
 
+    dups = sorted(dups, key=lambda x: (-x['size'], x['modified']))
     render_tables('dups', dups)
 
+    print()
+    print('Folder: ', ARGS.path, ' Limit size: ', ARGS.size, ARGS.unit)
+    print('Found files size: ', do_filesizeformat(files_size))
+    print('Time end: ',time_end)
+    print('Took time: ', time_end - time_start)
+    print('Report saved in: ', Path(ARGS.report).resolve())
