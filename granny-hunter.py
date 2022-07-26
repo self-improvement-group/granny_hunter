@@ -30,7 +30,7 @@ def search_files(path):
                 )
                 progress(entry)
             elif entry.is_dir():
-                search_files(entry)
+                search_files(os.path.relpath(entry, start=path))
 
 
 def progress_start():
