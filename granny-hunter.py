@@ -1,5 +1,7 @@
+from ast import arg
 import os
 import hashlib
+from queue import Queue
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -16,15 +18,38 @@ def md5(fname):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
+class EndLoop(Exception):
+
+    pass
 
 def search_loop(path):
-    dir_list = search(path)
+    search(path)
     
-    while len(dir_list) > 0:
-        for folder in dir_list:
-            new_folders = search(folder)
-            dir_list.extend(new_folders)
-            dir_list.remove(folder)
+
+    tl = [q.get()]
+    while len(tl) > 0 or not q.empty():
+        size_q = q.qsize()
+        if len(tl) < 10:
+            for i in range(size_q):
+                if i > 10:
+                    break
+                tl.append(q.get())
+            for t in tl:
+                try:
+                    t.start()
+                except:
+                    pass
+        while len(tl) > 0:
+            try:
+                for t in tl:
+                    if t.is_alive():
+                        pass
+                    else:
+                        tl.remove(t)
+                        raise EndLoop('break')
+            except EndLoop:
+                break
+
 
 def search(path):
     folders = []
@@ -41,7 +66,8 @@ def search(path):
                 progress(entry)
             elif entry.is_dir():
                 folders.append(entry)
-    return folders
+    for f in folders:
+        q.put(threading.Thread(target=search, args=(f,)))
 
 def progress_start():
     print('Files count:0 Total size:0', end='')
@@ -119,12 +145,17 @@ if __name__ == '__main__':
     file_count = 0
     files_size = 0
 
+    q = Queue()
+    t_loop = threading.Thread(target=search_loop, args=(PATH,))
+
+
     time_start = datetime.now()
 
+    t_loop.start()
     progres = threading.Thread(target=loop_print)
     progres.start()
-    search_loop(PATH)
-
+    # search_loop(PATH)
+    t_loop.join()
     progres.do_run = False
 
     big_dic = sorted(big_dic, key=lambda x: (-x['size'], x['modified']))
