@@ -6,7 +6,7 @@ from pathlib import Path
 import argparse
 from time import sleep
 from html_table import tabulate
-from operator import concat, itemgetter
+from operator import itemgetter
 from jinja2.filters import do_filesizeformat
 
 def md5(fname):
@@ -119,7 +119,6 @@ if __name__ == '__main__':
     }[ARGS.unit]
 
     big_dic = []
-    spaces = u'0x20'
     scanned_size = 0
     file_count = 0
     files_size = 0
