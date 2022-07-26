@@ -17,7 +17,17 @@ def md5(fname):
     return hash_md5.hexdigest()
 
 
-def search_files(path):
+def search_loop(path):
+    dir_list = search(path)
+    
+    while len(dir_list) > 0:
+        for folder in dir_list:
+            new_folders = search(folder)
+            dir_list.extend(new_folders)
+            dir_list.remove(folder)
+
+def search(path):
+    folders = []
     with os.scandir(path) as it:
         for entry in it:
             if entry.is_file() and entry.stat().st_size>=LIMIT_SIZE:
@@ -30,8 +40,8 @@ def search_files(path):
                 )
                 progress(entry)
             elif entry.is_dir():
-                search_files(os.path.join('\\?\\',entry))
-
+                folders.append(entry)
+    return folders
 
 def progress_start():
     print('Files count:0 Total size:0', end='')
@@ -113,7 +123,7 @@ if __name__ == '__main__':
 
     progres = threading.Thread(target=loop_print)
     progres.start()
-    search_files(PATH)
+    search_loop(PATH)
 
     progres.do_run = False
 
