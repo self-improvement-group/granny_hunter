@@ -31,7 +31,8 @@ def search_files(path):
                 )
                 progress(entry)
             elif entry.is_dir():
-                q.put(threading.Thread(target=search_files, args=(entry,)))
+                # q.put(threading.Thread(target=search_files, args=(entry,)))
+                search_files(entry)
 
 
 def progress_start():
@@ -63,31 +64,41 @@ def procees_files(files: list):
 class NoThreads(Exception): pass
 
 # о_0
-def loop():
-    tl = []
-    while True:
-        if q.empty():
-            break
-        for i in range(q.qsize()):
-            tl.append(q.get())
-        for ti in tl:
-            ti.start()
-        for ti in tl:
-            ti.join()
-        tl = []
+# def loop():
+#     tl = []
+#     ctnf = threading.active_count() - 1
+#     while True:
+#         if q.empty():
+#             break
+#         for i in range(q.qsize()):
+#             tl.append(q.get())
+#         for ti in tl:
+#             ti.start()
+#         while True:
+#             ctn = threading.active_count()
+#             if ctn == ctnf:
+#                 break
+#             while ctn <= threading.active_count():
+#                 pass
+#             try:
+#                 q.get().start()
+#             except:
+#                 pass
+#         tl = []
 
 def loop_print():
     global file_count
     global files_size
-    while True:
+    t = threading.current_thread()
+    while getattr(t, "do_run", True):
         print(f'\r... Found files:{file_count} Total size:{files_size} bytes', end='')
-        sleep(0.5)
+        sleep(0.1)
         print(f'\r|.. Found files:{file_count} Total size:{files_size} bytes', end='')
-        sleep(0.5)
+        sleep(0.1)
         print(f'\r.|. Found files:{file_count} Total size:{files_size} bytes', end='')
-        sleep(0.5)
+        sleep(0.1)
         print(f'\r..| Found files:{file_count} Total size:{files_size} bytes', end='')
-        sleep(0.5)
+        sleep(0.1)
 
 # def loop():
 #     global q
@@ -160,24 +171,24 @@ if __name__ == '__main__':
     file_count = 0
     files_size = 0
 
-    q = queue.Queue()
-    ql = threading.Thread(target=loop)
+    # q = queue.Queue()
+    # ql = threading.Thread(target=loop)
 
     # progress_start()
     time_start = datetime.now()
 
-    search_files(PATH)
-    tl = [q.get()]
     progres = threading.Thread(target=loop_print)
-    ql.start()
     progres.start()
-    ql.join()
-    progres.stop()
+    search_files(PATH)
+    # tl = [q.get()]
+    # ql.start()
+    # ql.join()
+    progres.do_run = False
 
     big_dic = sorted(big_dic, key=lambda x: (-x['size'], x['modified']))
 
     time_end = datetime.now()
-    progress_end()
+    # progress_end()
     print(time_end - time_start)
 
     Path(ARGS.report).mkdir(exist_ok=True)
