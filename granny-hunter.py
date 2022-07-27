@@ -18,37 +18,10 @@ def md5(fname):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
-class EndLoop(Exception):
 
-    pass
-
-def search_loop(path):
-    search(path)
-    
-
-    tl = [q.get()]
-    while len(tl) > 0 or not q.empty():
-        size_q = q.qsize()
-        if len(tl) < 10:
-            for i in range(size_q):
-                if i > 10:
-                    break
-                tl.append(q.get())
-            for t in tl:
-                try:
-                    t.start()
-                except:
-                    pass
-        while len(tl) > 0:
-            try:
-                for t in tl:
-                    if t.is_alive():
-                        pass
-                    else:
-                        tl.remove(t)
-                        raise EndLoop('break')
-            except EndLoop:
-                break
+def search_loop():
+    while not q.empty():
+        search(q.get())
 
 
 def search(path):
@@ -70,7 +43,7 @@ def search(path):
             elif entry.is_dir():
                 folders.append(entry)
     for f in folders:
-        q.put(threading.Thread(target=search, args=(f,)))
+        q.put(f)
 
 def progress_start():
     print('Files count:0 Total size:0', end='')
@@ -150,16 +123,21 @@ if __name__ == '__main__':
     files_size = 0
 
     q = Queue()
-    t_loop = threading.Thread(target=search_loop, args=(PATH,))
-
-
+    tl = []
     time_start = datetime.now()
     print('Time start: ',time_start)
-    t_loop.start()
     progres = threading.Thread(target=loop_print)
     progres.start()
+    search(PATH)
+    for i in range(4):
+        tl.append(threading.Thread(target=search_loop))
+        tl[i].start()
 
-    t_loop.join()
+
+    
+    for t in tl:
+        t.join()
+
     progres.do_run = False
 
     big_dic = sorted(big_dic, key=lambda x: (-x['size'], x['modified']))
