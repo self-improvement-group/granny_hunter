@@ -3,7 +3,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 
 
 def get_uri(path):
-    if path is not Path:
+    if not isinstance(path, Path):
         path = Path(path)
     return path.as_uri().replace(path.name, '')
 

@@ -18,11 +18,9 @@ def md5(fname):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
-
 def search_loop():
     while not q.empty():
         search(q.get())
-
 
 def search(path):
     global scanned_size
@@ -55,22 +53,8 @@ def progress(file):
     file_count += 1
     files_size += file.stat().st_size
 
-
 def progress_end():
     print(f'Found files:{file_count} Total size:{files_size} bytes')
-
-
-def procees_files(files: list):
-
-    for file in files:
-        big_dic.append(
-            {'hash':md5(file),
-            'path':Path(file).resolve(),
-            'name':file.name,
-            'size':file.stat().st_size,
-            'modified':datetime.fromtimestamp(os.path.getmtime(file))}
-        )
-
 
 def loop_print():
     global file_count
@@ -86,7 +70,6 @@ def loop_print():
         print(f'\r..| Found files:{file_count} Scanned:{do_filesizeformat(scanned_size).ljust(7)}', end='')
         sleep(0.1)
 
-
 def render_tables(name, data):
     offset = 0
     page = 1
@@ -97,7 +80,6 @@ def render_tables(name, data):
         tabulate(ARGS.report.joinpath(name + str(page) + '.html'), name, page_data, page)
         page += 1
         offset += 60
-
 
 if __name__ == '__main__':
 
@@ -133,8 +115,6 @@ if __name__ == '__main__':
         tl.append(threading.Thread(target=search_loop))
         tl[i].start()
 
-
-    
     for t in tl:
         t.join()
 
