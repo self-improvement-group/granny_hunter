@@ -4,7 +4,6 @@ This script automatically generates tabel of files that passed through filter, a
 Using example
 ```sh
 py granny-hunter.py D:/WorkSpace 800 -unit MB -report D:/Report
-py granny-gunter.py [path] [size] -unit [B, KB, MB, GB] -report [path]
 ```
 ```sh
 py granny-gunter.py [path] [size] -unit [B, KB, MB, GB] -report [path]
